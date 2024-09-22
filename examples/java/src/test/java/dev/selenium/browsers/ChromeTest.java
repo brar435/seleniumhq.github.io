@@ -1,183 +1,103 @@
-package dev.selenium.browsers;
+import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+import time
 
-import dev.selenium.BaseTest;
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.regex.Pattern;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeDriverService;
-import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.chromium.ChromiumDriverLogLevel;
-import org.openqa.selenium.logging.LogEntries;
-import org.openqa.selenium.logging.LogType;
-import org.openqa.selenium.logging.LoggingPreferences;
-import org.openqa.selenium.remote.service.DriverFinder;
+# Discord webhook URL (replace this with your actual webhook URL)
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/your-webhook-url"
 
+# Function to send a Discord notification
+def send_discord_notification(message):
+    data = {
+        "content": message
+    }
+    response = requests.post(DISCORD_WEBHOOK_URL, json=data)
+    if response.status_code == 204:
+        print("Discord notification sent successfully.")
+    else:
+        print(f"Failed to send Discord notification: {response.status_code}")
 
-public class ChromeTest extends BaseTest {
-  @AfterEach
-  public void clearProperties() {
-    System.clearProperty(ChromeDriverService.CHROME_DRIVER_LOG_PROPERTY);
-    System.clearProperty(ChromeDriverService.CHROME_DRIVER_LOG_LEVEL_PROPERTY);
-  }
+# Set up Selenium WebDriver
+def setup_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--start-maximized")  # Maximize window on start
+    options.add_argument("--ignore-certificate-errors")  # Ignore SSL certificate errors
+    options.add_argument("--disable-gpu")  # Disable GPU acceleration (optional)
+    options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems on Linux
+    options.add_argument('--no-proxy-server')
+    options.add_argument('--proxy-server="direct://"')
+    options.add_argument('--proxy-bypass-list=*')
+    options.add_argument("--allow-running-insecure-content")  # Allow insecure content
+    options.add_argument("--disable-web-security")  # Disable web security if necessary
+    options.add_argument("--disable-extensions")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-  @Test
-  public void basicOptions() {
-    ChromeOptions options = new ChromeOptions();
-    driver = new ChromeDriver(options);
-  }
+    # Path to chromedriver (you can customize it if needed)
+    service = Service('C:/Downloads/Compressed/chromedriver_win32o/chromedriver.exe')  # Replace with your actual path
+    return webdriver.Chrome(service=service, options=options)
 
-  @Test
-  public void arguments() {
-    ChromeOptions options = new ChromeOptions();
+# Open Amazon job search page
+def open_job_search_page(driver):
+    driver.get("https://hiring.amazon.ca/app#/jobSearch")
+    time.sleep(5)  # Wait for the page to load
 
-    options.addArguments("--start-maximized");
+# Function to automate job application process
+def apply_to_jobs(driver, keywords):
+    job_listings = driver.find_elements(By.CSS_SELECTOR, 'div.job-tile a.job-link')  # Update selector
 
-    driver = new ChromeDriver(options);
-  }
+    for job in job_listings:
+        try:
+            job_title = job.text
 
-  @Test
-  public void setBrowserLocation() {
-    ChromeOptions options = new ChromeOptions();
+            # Check if any of the keywords are in the job title/description
+            if any(keyword.lower() in job_title.lower() for keyword in keywords):
+                job.click()
+                time.sleep(3)
 
-    options.setBinary(getChromeLocation());
+                while True:
+                    try:
+                        select_shift_button = driver.find_element(By.XPATH, '//*[@id="select-shift-button-id"]')  # Update XPath
+                        select_shift_button.click()
+                        time.sleep(0.5)
 
-    driver = new ChromeDriver(options);
-  }
+                        shift_option = driver.find_element(By.XPATH, '//*[@id="shift-option-id"]')  # Update XPath
+                        shift_option.click()
+                        time.sleep(0.5)
 
-  @Test
-  public void extensionOptions() {
-    ChromeOptions options = new ChromeOptions();
-    Path path = Paths.get("src/test/resources/extensions/webextensions-selenium-example.crx");
-    File extensionFilePath = new File(path.toUri());
+                        apply_button = driver.find_element(By.XPATH, '//*[@id="apply-button-id"]')  # Update XPath
+                        apply_button.click()
+                        time.sleep(1)
 
-    options.addExtensions(extensionFilePath);
+                        original_window = driver.current_window_handle
+                        windows = driver.window_handles
 
-    driver = new ChromeDriver(options);
-    driver.get("https://www.selenium.dev/selenium/web/blank.html");
-    WebElement injected = driver.findElement(By.id("webextensions-selenium-example"));
-    Assertions.assertEquals(
-        "Content injected by webextensions-selenium-example", injected.getText());
-  }
+                        for window in windows:
+                            if window != original_window:
+                                driver.switch_to.window(window)
+                                break
 
-  @Test
-  public void excludeSwitches() {
-    ChromeOptions options = new ChromeOptions();
+                        time.sleep(1)
 
-    options.setExperimentalOption("excludeSwitches", List.of("disable-popup-blocking"));
+                        send_discord_notification(f"Shift picked successfully for job: {job_title}. Please fill in your application.")
+                        print("Shift picked. Check Discord notification.")
+                        break
 
-    driver = new ChromeDriver(options);
-  }
+                    except Exception:
+                        time.sleep(1)
+                        continue
 
-  @Test
-  public void loggingPreferences() {
-    ChromeOptions options = new ChromeOptions();
-    LoggingPreferences logPrefs = new LoggingPreferences();
-    logPrefs.enable(LogType.PERFORMANCE, Level.ALL);
-    options.setCapability(ChromeOptions.LOGGING_PREFS, logPrefs);
+        except Exception as e:
+            print(f"Error applying to job: {e}")
+            driver.back()
+            time.sleep(2)
 
-    driver = new ChromeDriver(options);
-    driver.get("https://www.selenium.dev");
-
-    LogEntries logEntries = driver.manage().logs().get(LogType.PERFORMANCE);
-    Assertions.assertFalse(logEntries.getAll().isEmpty());
-  }
-
-  @Test
-  public void logsToFile() throws IOException {
-    File logLocation = getTempFile("logsToFile", ".log");
-    ChromeDriverService service =
-        new ChromeDriverService.Builder().withLogFile(logLocation).build();
-
-    driver = new ChromeDriver(service);
-
-    String fileContent = new String(Files.readAllBytes(logLocation.toPath()));
-    Assertions.assertTrue(fileContent.contains("Starting ChromeDriver"));
-  }
-
-  @Test
-  public void logsToConsole() throws IOException {
-    File logLocation = getTempFile("logsToConsole", ".log");
-    System.setOut(new PrintStream(logLocation));
-
-    ChromeDriverService service =
-        new ChromeDriverService.Builder().withLogOutput(System.out).build();
-
-    driver = new ChromeDriver(service);
-
-    String fileContent = new String(Files.readAllBytes(logLocation.toPath()));
-    Assertions.assertTrue(fileContent.contains("Starting ChromeDriver"));
-  }
-
-  @Test
-  public void logsWithLevel() throws IOException {
-    File logLocation = getTempFile("logsWithLevel", ".log");
-    System.setProperty(
-        ChromeDriverService.CHROME_DRIVER_LOG_PROPERTY, logLocation.getAbsolutePath());
-
-    ChromeDriverService service =
-        new ChromeDriverService.Builder().withLogLevel(ChromiumDriverLogLevel.DEBUG).build();
-
-    driver = new ChromeDriver(service);
-
-    String fileContent = new String(Files.readAllBytes(logLocation.toPath()));
-    Assertions.assertTrue(fileContent.contains("[DEBUG]:"));
-  }
-
-  @Test
-  public void configureDriverLogs() throws IOException {
-    File logLocation = getTempFile("configureDriverLogs", ".log");
-    System.setProperty(
-        ChromeDriverService.CHROME_DRIVER_LOG_PROPERTY, logLocation.getAbsolutePath());
-    System.setProperty(
-        ChromeDriverService.CHROME_DRIVER_LOG_LEVEL_PROPERTY,
-        ChromiumDriverLogLevel.DEBUG.toString());
-
-    ChromeDriverService service =
-        new ChromeDriverService.Builder().withAppendLog(true).withReadableTimestamp(true).build();
-
-    driver = new ChromeDriver(service);
-
-    String fileContent = new String(Files.readAllBytes(logLocation.toPath()));
-    Pattern pattern = Pattern.compile("\\[\\d\\d-\\d\\d-\\d\\d\\d\\d", Pattern.CASE_INSENSITIVE);
-    Assertions.assertTrue(pattern.matcher(fileContent).find());
-  }
-
-  @Test
-  public void disableBuildChecks() throws IOException {
-    File logLocation = getTempFile("disableBuildChecks", ".log");
-    System.setProperty(
-        ChromeDriverService.CHROME_DRIVER_LOG_PROPERTY, logLocation.getAbsolutePath());
-    System.setProperty(
-        ChromeDriverService.CHROME_DRIVER_LOG_LEVEL_PROPERTY,
-        ChromiumDriverLogLevel.WARNING.toString());
-
-    ChromeDriverService service =
-        new ChromeDriverService.Builder().withBuildCheckDisabled(true).build();
-
-    driver = new ChromeDriver(service);
-
-    String fileContent = new String(Files.readAllBytes(logLocation.toPath()));
-    String expected =
-        "[WARNING]: You are using an unsupported command-line switch: --disable-build-check";
-    Assertions.assertTrue(fileContent.contains(expected));
-  }
-
-  private File getChromeLocation() {
-    ChromeOptions options = new ChromeOptions();
-    options.setBrowserVersion("stable");
-    DriverFinder finder = new DriverFinder(ChromeDriverService.createDefaultService(), options);
-    return new File(finder.getBrowserPath());
-  }
-}
+# Execute the script
+if __name__ == "__main__":
+    driver = setup_driver()
+    open_job_search_page(driver)
+    
+    # Keywords for job filtering (add more if necessary)
+    keywords = ['Brampton', 'Toronto', 'Mississauga']
+    apply_to_jobs(driver, keywords)
